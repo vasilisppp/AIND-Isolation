@@ -152,44 +152,6 @@ def custom_score_3(game, player):
 # TODO: move depth to function arguments instead of class
 # TODO: figure out how to integrate the score function
 
-def minimax_score(game,player):
-    player.increment_depth()
-    loc='{}->{} '.format(player._depth,game.get_player_location(game.inactive_player))
-    print(loc,end='' )
-    if player.time_left() < player.TIMER_THRESHOLD:
-        player.reset_depth()
-        raise SearchTimeout()    
-    
-    min_value = game.active_player!=player
-    
-    # check if it's a terminal state first
-    legal_moves = game.get_legal_moves()
-    if len(legal_moves)==0:
-        player.decrement_depth()
-        return float('inf') if min_value else float('-inf')
-    
-    # check the depth now
-    # if it wasn't a terminal state we have to go deeper so we can use a 
-    # heuristic function if we're at the depth limit
-    if player._depth >=  player.search_depth:
-        player.decrement_depth()
-        return center_score(game,player)
-    
-    # If depth limit is not reached yet we can go one more level
-    if min_value:
-        v = float("inf")
-        for m in legal_moves:
-            v = min(v,player.score(game.forecast_move(m),player))
-        player.decrement_depth()
-        return v
-    else:
-        v = float("-inf")
-        for m in legal_moves:
-            v = max(v,player.score(game.forecast_move(m),player))
-        player.decrement_depth()
-        return v  
-
-
 class IsolationPlayer:
     """Base class for minimax and alphabeta agents -- this class is never
     constructed or tested directly.
@@ -212,12 +174,19 @@ class IsolationPlayer:
         positive value large enough to allow the function to return before the
         timer expires.
     """
-    def __init__(self, search_depth=3, score_fn=custom_score, timeout=10.):
+    def __init__(self, search_depth=3, score_fn=None, timeout=10.):
         self.search_depth = search_depth
-        self.score = score_fn
         self.time_left = None
         self.TIMER_THRESHOLD = timeout
-
+    """
+    I know this shouldn't be changed but I changed it to integrate the code in
+    in the score method. I could override it and make it point to an external
+    minimax function in the MinimaxPlayer __init__ but I was having trouble 
+    overriding it with a score method in the MinimaxPlayer class so I changed 
+    it to a not implemented method
+    """
+    def score(self):
+        raise NotImplementedError
 
 class MinimaxPlayer(IsolationPlayer):
     """Game-playing agent that chooses a move using depth-limited minimax
@@ -225,46 +194,45 @@ class MinimaxPlayer(IsolationPlayer):
     minimax to return a good move before the search time limit expires.
     """
     
-    def __init__(self,search_depth=3,score_fn=minimax_score,timeout=10.):
-        super().__init__(search_depth=search_depth,score_fn=score_fn,timeout=timeout)
-        self._depth=0
+    def __init__(self,search_depth=3,score_fn=None,timeout=10.):
+        super().__init__(search_depth=search_depth,timeout=timeout)
 
-    def increment_depth(self):
-        self._depth+=1
-        pass
-    
-    def decrement_depth(self):
-        self._depth-=1
-        pass
-    
-    def reset_depth(self):
-        self._depth=0
-        pass
-    
-    '''
-    def score(self,game):
+    def score(self,game,depth):
         if self.time_left() < self.TIMER_THRESHOLD:
-            raise SearchTimeout()
+            raise SearchTimeout()    
+        
+        min_value = game.active_player!=self
+        
+        # check if it's a terminal state first
         legal_moves = game.get_legal_moves()
-        if game.active_player!=self:
-            # min value implementation                
-            if len(legal_moves)==0:
-                return float('inf')
-            
+        if len(legal_moves)==0:
+            return float('inf') if min_value else float('-inf')
+        
+        # check the depth now
+        # if it wasn't a terminal state we have to go deeper so we can use a 
+        # heuristic function if we're at the depth limit
+# =============================================================================
+#         loc='{}->({},{}) '.format(depth,game.get_player_location(game._player_1),
+#              game.get_player_location(game._player_2))
+#         print(loc)
+# =============================================================================
+        if depth >=  self.search_depth:
+            w, h = game.width / 2., game.height / 2.
+            y, x = game.get_player_location(self)
+            return float((h - y)**2 + (w - x)**2)
+        
+        # If depth limit is not reached yet we can go one more level
+        if min_value:
             v = float("inf")
             for m in legal_moves:
-                v = min(v,self.score(game.forecast_move(m)))
+                v = min(v,self.score(game.forecast_move(m),depth+1))
             return v
         else:
-            # max value
-            if len(legal_moves)==0:
-                return -float('inf')
-            
             v = float("-inf")
             for m in legal_moves:
-                v = max(v,self.score(game.forecast_move(m)))
+                v = max(v,self.score(game.forecast_move(m),depth+1))
             return v  
-    '''
+
     
     def get_move(self, game, time_left):
         """Search for the best move from the available legal moves and return a
@@ -294,7 +262,7 @@ class MinimaxPlayer(IsolationPlayer):
             Board coordinates corresponding to a legal move; may return
             (-1, -1) if there are no available legal moves.
         """
-        print("\n"+game.to_string())
+#        print("\n"+game.to_string())
         
         self.time_left = time_left
 
@@ -363,7 +331,7 @@ class MinimaxPlayer(IsolationPlayer):
         move_score = []
         for m in legal_moves:
             new_game=game.forecast_move(m)
-            move_score.append(self.score(new_game,self))
+            move_score.append(self.score(new_game,1))
         
         _,best_move = max(zip(move_score,legal_moves))
                 
